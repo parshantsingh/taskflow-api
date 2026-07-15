@@ -2,6 +2,7 @@ from rest_framework import viewsets, permissions
 from django_filters.rest_framework import DjangoFilterBackend
 from .models import Task
 from .serializers import TaskSerializer
+from .tasks import send_due_date_reminder
 
 
 class TaskViewSet(viewsets.ModelViewSet):
@@ -17,3 +18,8 @@ class TaskViewSet(viewsets.ModelViewSet):
         context = super().get_serializer_context()
         context['request'] = self.request
         return context
+
+    def perform_create(self, serializer):
+        task = serializer.save()
+        if task.due_date:
+            send_due_date_reminder.apply_async(args=[task.id], eta=task.due_date)
