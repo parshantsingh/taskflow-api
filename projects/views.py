@@ -8,7 +8,9 @@ class ProjectViewSet(viewsets.ModelViewSet):
     permission_classes = [permissions.IsAuthenticated]
 
     def get_queryset(self):
-        return Project.objects.filter(owner=self.request.user)
+            if getattr(self, 'swagger_fake_view', False):
+                return Project.objects.none()
+            return Project.objects.filter(owner=self.request.user)
 
     def perform_create(self, serializer):
         serializer.save(owner=self.request.user)
