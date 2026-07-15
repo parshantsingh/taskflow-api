@@ -134,3 +134,5 @@ SIMPLE_JWT = {
     'REFRESH_TOKEN_LIFETIME': timedelta(days=7),
     'ROTATE_REFRESH_TOKENS': True,
 }
+
+AUTH_USER_MODEL = 'accounts.CustomUser'
