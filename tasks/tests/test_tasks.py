@@ -51,3 +51,30 @@ def test_activity_log_created_on_task_creation(auth_client):
     assert response.status_code == 200
     assert len(response.data) == 1
     assert response.data[0]['action'] == 'created'
+    
+
+@pytest.mark.django_db
+def test_search_tasks_by_title(auth_client):
+    client, user = auth_client
+    project_resp = client.post('/api/projects/', {'name': 'Project A'})
+    project_id = project_resp.data['id']
+    client.post('/api/tasks/', {'project': project_id, 'title': 'Fix login bug'})
+    client.post('/api/tasks/', {'project': project_id, 'title': 'Update documentation'})
+
+    response = client.get('/api/tasks/?search=login')
+    assert response.status_code == 200
+    assert response.data['count'] == 1
+    assert 'login' in response.data['results'][0]['title'].lower()
+
+
+@pytest.mark.django_db
+def test_order_tasks_by_priority(auth_client):
+    client, user = auth_client
+    project_resp = client.post('/api/projects/', {'name': 'Project A'})
+    project_id = project_resp.data['id']
+    client.post('/api/tasks/', {'project': project_id, 'title': 'Low priority task', 'priority': 'low'})
+    client.post('/api/tasks/', {'project': project_id, 'title': 'High priority task', 'priority': 'high'})
+
+    response = client.get('/api/tasks/?ordering=priority')
+    assert response.status_code == 200
+    assert response.data['count'] == 2

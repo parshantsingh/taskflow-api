@@ -1,17 +1,21 @@
 from rest_framework import viewsets, permissions, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
+from rest_framework.filters import OrderingFilter
 from django_filters.rest_framework import DjangoFilterBackend
-from .models import Task, Comment
+from .models import Task
 from .serializers import TaskSerializer, CommentSerializer, ActivityLogSerializer
+from .filters import TaskFilter
 from .tasks import send_due_date_reminder
 
 
 class TaskViewSet(viewsets.ModelViewSet):
     serializer_class = TaskSerializer
     permission_classes = [permissions.IsAuthenticated]
-    filter_backends = [DjangoFilterBackend]
-    filterset_fields = ['status', 'priority', 'project']
+    filter_backends = [DjangoFilterBackend, OrderingFilter]
+    filterset_class = TaskFilter
+    ordering_fields = ['created_at', 'due_date', 'priority', 'status']
+    ordering = ['-created_at']
 
     def get_queryset(self):
         if getattr(self, 'swagger_fake_view', False):
