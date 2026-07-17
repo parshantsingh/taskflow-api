@@ -1,7 +1,8 @@
 import threading
-from django.db.models.signals import pre_save, post_save
+from django.db.models.signals import pre_save, post_save, post_delete
 from django.dispatch import receiver
 from .models import Task, Comment, ActivityLog
+from django.core.cache import cache
 
 _thread_locals = threading.local()
 
@@ -53,3 +54,13 @@ def log_comment(sender, instance, created, **kwargs):
         ActivityLog.objects.create(task=instance.task, actor=instance.author,
                                     action=ActivityLog.ActionType.COMMENTED,
                                     detail=f"{instance.author.username} commented")
+        
+
+@receiver(post_save, sender=Task)
+def invalidate_project_stats_cache_on_save(sender, instance, **kwargs):
+    cache.delete(f'project_stats:{instance.project_id}')
+
+
+@receiver(post_delete, sender=Task)
+def invalidate_project_stats_cache_on_delete(sender, instance, **kwargs):
+    cache.delete(f'project_stats:{instance.project_id}')

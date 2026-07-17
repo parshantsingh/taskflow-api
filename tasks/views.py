@@ -18,9 +18,11 @@ class TaskViewSet(viewsets.ModelViewSet):
     ordering = ['-created_at']
 
     def get_queryset(self):
-        if getattr(self, 'swagger_fake_view', False):
-            return Task.objects.none()
-        return Task.objects.filter(project__memberships__user=self.request.user).distinct()
+            if getattr(self, 'swagger_fake_view', False):
+                return Task.objects.none()
+            return Task.objects.filter(
+                project__memberships__user=self.request.user
+            ).distinct().select_related('project', 'assigned_to')
 
     def get_serializer_context(self):
         context = super().get_serializer_context()

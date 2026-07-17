@@ -16,14 +16,11 @@ class ProjectMembershipSerializer(serializers.ModelSerializer):
 
 class ProjectSerializer(serializers.ModelSerializer):
     owner = serializers.ReadOnlyField(source='owner.username')
-    member_count = serializers.SerializerMethodField()
+    member_count = serializers.IntegerField(source='annotated_member_count', read_only=True)
 
     class Meta:
         model = Project
         fields = ['id', 'name', 'description', 'owner', 'member_count', 'created_at', 'updated_at']
-
-    def get_member_count(self, obj):
-        return obj.memberships.count()
 
 
 class AddMemberSerializer(serializers.Serializer):

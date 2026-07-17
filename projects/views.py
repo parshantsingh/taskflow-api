@@ -2,6 +2,8 @@ from rest_framework import viewsets, permissions, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from django.contrib.auth import get_user_model
+from django.db.models import Count, OuterRef, Exists
+from django.core.cache import cache
 from .models import Project, ProjectMembership
 from .serializers import ProjectSerializer, ProjectMembershipSerializer, AddMemberSerializer
 from .permissions import IsProjectAdminOrOwner
@@ -14,20 +16,27 @@ class ProjectViewSet(viewsets.ModelViewSet):
     permission_classes = [permissions.IsAuthenticated, IsProjectAdminOrOwner]
 
     def get_queryset(self):
-        if getattr(self, 'swagger_fake_view', False):
-            return Project.objects.none()
-        return Project.objects.filter(memberships__user=self.request.user).distinct()
+            if getattr(self, 'swagger_fake_view', False):
+                return Project.objects.none()
+            member_subquery = ProjectMembership.objects.filter(project=OuterRef('pk'), user=self.request.user)
+            return Project.objects.filter(Exists(member_subquery)).select_related('owner').annotate(
+                annotated_member_count=Count('memberships', distinct=True)
+            )
 
     def perform_create(self, serializer):
         project = serializer.save(owner=self.request.user)
         ProjectMembership.objects.create(project=project, user=self.request.user, role=ProjectMembership.Role.OWNER)
+        # Manually set the annotation on this instance since it wasn't fetched
+        # through get_queryset()'s annotated query — DRF serializes this same
+        # object right after this method returns.
+        project.annotated_member_count = 1
 
     @action(detail=True, methods=['get', 'post'], url_path='members')
     def members(self, request, pk=None):
         project = self.get_object()
 
         if request.method == 'GET':
-            memberships = project.memberships.all()
+            memberships = project.memberships.select_related('user').all()
             serializer = ProjectMembershipSerializer(memberships, many=True)
             return Response(serializer.data)
 
@@ -51,3 +60,21 @@ class ProjectViewSet(viewsets.ModelViewSet):
             return Response({'detail': 'Cannot remove the project owner.'}, status=status.HTTP_400_BAD_REQUEST)
         membership.delete()
         return Response(status=status.HTTP_204_NO_CONTENT)
+
+    @action(detail=True, methods=['get'], url_path='stats')
+    def stats(self, request, pk=None):
+        project = self.get_object()
+        cache_key = f'project_stats:{project.id}'
+        cached = cache.get(cache_key)
+        if cached is not None:
+            return Response(cached)
+
+        status_counts = project.tasks.values('status').annotate(count=Count('id'))
+        priority_counts = project.tasks.values('priority').annotate(count=Count('id'))
+        data = {
+            'total_tasks': project.tasks.count(),
+            'by_status': {item['status']: item['count'] for item in status_counts},
+            'by_priority': {item['priority']: item['count'] for item in priority_counts},
+        }
+        cache.set(cache_key, data, timeout=60)
+        return Response(data)
