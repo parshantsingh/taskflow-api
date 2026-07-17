@@ -29,3 +29,38 @@ class Task(models.Model):
 
     def __str__(self):
         return self.title
+    
+
+class Comment(models.Model):
+    task = models.ForeignKey(Task, on_delete=models.CASCADE, related_name='comments')
+    author = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='task_comments')
+    body = models.TextField()
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['created_at']
+
+    def __str__(self):
+        return f"Comment by {self.author.username} on {self.task.title}"
+
+
+class ActivityLog(models.Model):
+    class ActionType(models.TextChoices):
+        CREATED = 'created', 'Created'
+        UPDATED = 'updated', 'Updated'
+        STATUS_CHANGED = 'status_changed', 'Status Changed'
+        COMMENTED = 'commented', 'Commented'
+        ASSIGNED = 'assigned', 'Assigned'
+        DELETED = 'deleted', 'Deleted'
+
+    task = models.ForeignKey(Task, on_delete=models.CASCADE, related_name='activity_logs')
+    actor = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, related_name='task_activities')
+    action = models.CharField(max_length=20, choices=ActionType.choices)
+    detail = models.CharField(max_length=255, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f"{self.action} on {self.task.title} by {self.actor}"
