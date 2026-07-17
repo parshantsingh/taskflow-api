@@ -12,9 +12,9 @@ class TaskViewSet(viewsets.ModelViewSet):
     filterset_fields = ['status', 'priority', 'project']
 
     def get_queryset(self):
-            if getattr(self, 'swagger_fake_view', False):
-                return Task.objects.none()
-            return Task.objects.filter(project__owner=self.request.user)
+        if getattr(self, 'swagger_fake_view', False):
+            return Task.objects.none()
+        return Task.objects.filter(project__memberships__user=self.request.user).distinct()
 
     def get_serializer_context(self):
         context = super().get_serializer_context()
