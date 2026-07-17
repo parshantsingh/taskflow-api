@@ -24,3 +24,11 @@ def auth_client(api_client, create_user):
     token = response.data['access']
     api_client.credentials(HTTP_AUTHORIZATION=f'Bearer {token}')
     return api_client, user
+
+
+@pytest.fixture(autouse=True)
+def clear_cache():
+    from django.core.cache import cache
+    cache.clear()
+    yield
+    cache.clear()
