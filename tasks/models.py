@@ -64,3 +64,22 @@ class ActivityLog(models.Model):
 
     def __str__(self):
         return f"{self.action} on {self.task.title} by {self.actor}"
+    
+    
+def attachment_upload_path(instance, filename):
+    return f'task_attachments/{instance.task.project_id}/{instance.task_id}/{filename}'
+
+
+class Attachment(models.Model):
+    task = models.ForeignKey(Task, on_delete=models.CASCADE, related_name='attachments')
+    file = models.FileField(upload_to=attachment_upload_path)
+    uploaded_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, related_name='uploaded_attachments')
+    original_filename = models.CharField(max_length=255)
+    file_size = models.PositiveIntegerField()
+    uploaded_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-uploaded_at']
+
+    def __str__(self):
+        return self.original_filename

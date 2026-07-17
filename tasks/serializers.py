@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import Task, Comment, ActivityLog
+from .models import Task, Comment, ActivityLog, Attachment
 from projects.models import ProjectMembership
 
 
@@ -31,3 +31,12 @@ class ActivityLogSerializer(serializers.ModelSerializer):
     class Meta:
         model = ActivityLog
         fields = ['id', 'action', 'detail', 'actor', 'created_at']
+        
+
+class AttachmentSerializer(serializers.ModelSerializer):
+    uploaded_by = serializers.ReadOnlyField(source='uploaded_by.username')
+
+    class Meta:
+        model = Attachment
+        fields = ['id', 'task', 'file', 'uploaded_by', 'original_filename', 'file_size', 'uploaded_at']
+        read_only_fields = ['task', 'original_filename', 'file_size']

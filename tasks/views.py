@@ -1,10 +1,13 @@
+import csv
+from django.http import HttpResponse
 from rest_framework import viewsets, permissions, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.filters import OrderingFilter
+from rest_framework.parsers import MultiPartParser, FormParser
 from django_filters.rest_framework import DjangoFilterBackend
-from .models import Task
-from .serializers import TaskSerializer, CommentSerializer, ActivityLogSerializer
+from .models import Task, Attachment
+from .serializers import TaskSerializer, CommentSerializer, ActivityLogSerializer, AttachmentSerializer
 from .filters import TaskFilter
 from .tasks import send_due_date_reminder
 
@@ -54,3 +57,53 @@ class TaskViewSet(viewsets.ModelViewSet):
         logs = task.activity_logs.all()
         serializer = ActivityLogSerializer(logs, many=True)
         return Response(serializer.data)
+    
+    @action(detail=True, methods=['get', 'post'], url_path='attachments', parser_classes=[MultiPartParser, FormParser])
+    def attachments(self, request, pk=None):
+        task = self.get_object()
+
+        if request.method == 'GET':
+            attachments = task.attachments.select_related('uploaded_by').all()
+            serializer = AttachmentSerializer(attachments, many=True)
+            return Response(serializer.data)
+
+        uploaded_file = request.FILES.get('file')
+        if not uploaded_file:
+            return Response({'detail': 'No file provided.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        attachment = Attachment.objects.create(
+            task=task,
+            file=uploaded_file,
+            uploaded_by=request.user,
+            original_filename=uploaded_file.name,
+            file_size=uploaded_file.size,
+        )
+        serializer = AttachmentSerializer(attachment)
+        return Response(serializer.data, status=status.HTTP_201_CREATED)
+
+    @action(detail=True, methods=['delete'], url_path='attachments/(?P<attachment_id>[^/.]+)')
+    def delete_attachment(self, request, pk=None, attachment_id=None):
+        task = self.get_object()
+        attachment = task.attachments.filter(id=attachment_id).first()
+        if not attachment:
+            return Response({'detail': 'Attachment not found.'}, status=status.HTTP_404_NOT_FOUND)
+        attachment.file.delete(save=False)
+        attachment.delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+    @action(detail=False, methods=['get'], url_path='export-csv')
+    def export_csv(self, request):
+        queryset = self.filter_queryset(self.get_queryset())
+
+        response = HttpResponse(content_type='text/csv')
+        response['Content-Disposition'] = 'attachment; filename="tasks_export.csv"'
+
+        writer = csv.writer(response)
+        writer.writerow(['ID', 'Title', 'Project', 'Status', 'Priority', 'Assigned To', 'Due Date', 'Created At'])
+        for task in queryset:
+            writer.writerow([
+                task.id, task.title, task.project.name, task.status, task.priority,
+                task.assigned_to.username if task.assigned_to else '',
+                task.due_date, task.created_at,
+            ])
+        return response

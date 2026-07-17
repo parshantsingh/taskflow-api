@@ -1,5 +1,5 @@
 import pytest
-
+from django.core.files.uploadedfile import SimpleUploadedFile
 
 @pytest.mark.django_db
 def test_create_task(auth_client):
@@ -78,3 +78,31 @@ def test_order_tasks_by_priority(auth_client):
     response = client.get('/api/tasks/?ordering=priority')
     assert response.status_code == 200
     assert response.data['count'] == 2
+    
+
+@pytest.mark.django_db
+def test_upload_attachment(auth_client):
+    client, user = auth_client
+    project_resp = client.post('/api/projects/', {'name': 'Project A'})
+    project_id = project_resp.data['id']
+    task_resp = client.post('/api/tasks/', {'project': project_id, 'title': 'Task 1'})
+    task_id = task_resp.data['id']
+
+    test_file = SimpleUploadedFile('report.txt', b'file contents here', content_type='text/plain')
+    response = client.post(f'/api/tasks/{task_id}/attachments/', {'file': test_file}, format='multipart')
+    assert response.status_code == 201
+    assert response.data['original_filename'] == 'report.txt'
+
+
+@pytest.mark.django_db
+def test_export_csv(auth_client):
+    client, user = auth_client
+    project_resp = client.post('/api/projects/', {'name': 'Project A'})
+    project_id = project_resp.data['id']
+    client.post('/api/tasks/', {'project': project_id, 'title': 'Task 1'})
+
+    response = client.get('/api/tasks/export-csv/')
+    assert response.status_code == 200
+    assert response['Content-Type'] == 'text/csv'
+    content = response.content.decode('utf-8')
+    assert 'Task 1' in content
