@@ -24,6 +24,8 @@ ALLOWED_HOSTS = env.list('ALLOWED_HOSTS', default=['localhost', '127.0.0.1'])
 # Application definition
 
 INSTALLED_APPS = [
+    'channels',
+
     'django.contrib.admin',
     'django.contrib.auth',
     'django.contrib.contenttypes',
@@ -167,3 +169,14 @@ CACHES = {
 }
 
 ANTHROPIC_API_KEY = env('ANTHROPIC_API_KEY', default='')
+
+ASGI_APPLICATION = 'taskflow_api.asgi.application'
+
+CHANNEL_LAYERS = {
+    'default': {
+        'BACKEND': 'channels_redis.core.RedisChannelLayer',
+        'CONFIG': {
+            'hosts': [env('REDIS_URL', default='redis://localhost:6379/0')],
+        },
+    },
+}
