@@ -5,6 +5,8 @@ from .models import Task, Comment, ActivityLog
 from django.core.cache import cache
 from asgiref.sync import async_to_sync
 from channels.layers import get_channel_layer
+from notifications.services import notify
+from notifications.models import Notification
 
 _thread_locals = threading.local()
 
@@ -59,11 +61,25 @@ def log_task_save(sender, instance, created, **kwargs):
     if created:
         log = ActivityLog.objects.create(task=instance, actor=actor, action=ActivityLog.ActionType.CREATED,
                                           detail=f"Task '{instance.title}' created")
+        if instance.assigned_to:
+            notify(
+                recipient=instance.assigned_to, actor=actor,
+                notification_type=Notification.NotificationType.TASK_ASSIGNED,
+                message=f"You were assigned to '{instance.title}'",
+                task=instance, project=instance.project,
+            )
     else:
         old_status = getattr(instance, '_old_status', None)
         if old_status and old_status != instance.status:
             log = ActivityLog.objects.create(task=instance, actor=actor, action=ActivityLog.ActionType.STATUS_CHANGED,
                                               detail=f"Status changed from {old_status} to {instance.status}")
+            if instance.assigned_to:
+                notify(
+                    recipient=instance.assigned_to, actor=actor,
+                    notification_type=Notification.NotificationType.STATUS_CHANGED,
+                    message=f"'{instance.title}' status changed to {instance.status}",
+                    task=instance, project=instance.project,
+                )
         else:
             log = ActivityLog.objects.create(task=instance, actor=actor, action=ActivityLog.ActionType.UPDATED,
                                               detail=f"Task '{instance.title}' updated")
@@ -77,6 +93,13 @@ def log_comment(sender, instance, created, **kwargs):
                                           action=ActivityLog.ActionType.COMMENTED,
                                           detail=f"{instance.author.username} commented")
         broadcast_activity(log)
+        if instance.task.assigned_to:
+            notify(
+                recipient=instance.task.assigned_to, actor=instance.author,
+                notification_type=Notification.NotificationType.COMMENT_ADDED,
+                message=f"{instance.author.username} commented on '{instance.task.title}'",
+                task=instance.task, project=instance.task.project,
+            )
         
 
 @receiver(post_save, sender=Task)

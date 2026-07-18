@@ -11,6 +11,8 @@ from tasks.ai_service import summarize_project
 from django.utils import timezone
 from datetime import timedelta
 from tasks.models import Task
+from notifications.services import notify
+from notifications.models import Notification
 
 User = get_user_model()
 
@@ -52,6 +54,13 @@ class ProjectViewSet(viewsets.ModelViewSet):
         )
         if not created:
             return Response({'detail': 'User is already a member.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        notify(
+            recipient=user, actor=request.user,
+            notification_type=Notification.NotificationType.PROJECT_INVITE,
+            message=f"{request.user.username} added you to '{project.name}'",
+            project=project,
+        )
         return Response(ProjectMembershipSerializer(membership).data, status=status.HTTP_201_CREATED)
 
     @action(detail=True, methods=['delete'], url_path='members/(?P<user_id>[^/.]+)')
