@@ -25,6 +25,7 @@ services:
     env_file:
       - .env
     environment:
+      - DJANGO_ENV=dev
       - DATABASE_URL=postgres://taskflow:taskflow@db:5432/taskflow
       - REDIS_URL=redis://redis:6379/0
     depends_on:

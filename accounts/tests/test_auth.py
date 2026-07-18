@@ -55,3 +55,12 @@ def test_login_locks_after_too_many_failed_attempts(create_user, api_client):
 
     response = api_client.post('/api/auth/login/', {'username': 'testuser', 'password': 'wrongpass'})
     assert response.status_code == 429
+    
+
+@pytest.mark.django_db
+def test_error_response_has_consistent_shape(api_client):
+    response = api_client.post('/api/auth/login/', {'username': 'nonexistent', 'password': 'wrong'})
+    assert response.status_code == 401
+    assert response.data['error'] is True
+    assert 'detail' in response.data
+    assert response.data['status_code'] == 401
