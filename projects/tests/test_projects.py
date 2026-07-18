@@ -1,4 +1,5 @@
 import pytest
+from unittest.mock import patch
 
 
 @pytest.mark.django_db
@@ -94,3 +95,17 @@ def test_project_list_has_no_n_plus_one_queries(auth_client, django_assert_max_n
 
     with django_assert_max_num_queries(10):
         client.get('/api/projects/')
+        
+
+@pytest.mark.django_db
+@patch('projects.views.summarize_project')
+def test_ai_project_summary(mock_summarize, auth_client):
+    mock_summarize.return_value = "The project is progressing well with 2 tasks in progress."
+    client, user = auth_client
+    project_resp = client.post('/api/projects/', {'name': 'Project A'})
+    project_id = project_resp.data['id']
+    client.post('/api/tasks/', {'project': project_id, 'title': 'Task 1'})
+
+    response = client.get(f'/api/projects/{project_id}/ai-summary/')
+    assert response.status_code == 200
+    assert 'summary' in response.data

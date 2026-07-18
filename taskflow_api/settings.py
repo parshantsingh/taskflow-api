@@ -165,3 +165,5 @@ CACHES = {
         'LOCATION': 'taskflow-cache',
     }
 }
+
+ANTHROPIC_API_KEY = env('ANTHROPIC_API_KEY', default='')

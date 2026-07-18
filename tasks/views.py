@@ -10,6 +10,7 @@ from .models import Task, Attachment
 from .serializers import TaskSerializer, CommentSerializer, ActivityLogSerializer, AttachmentSerializer
 from .filters import TaskFilter
 from .tasks import send_due_date_reminder
+from .ai_service import generate_task_description, suggest_priority
 
 
 class TaskViewSet(viewsets.ModelViewSet):
@@ -107,3 +108,34 @@ class TaskViewSet(viewsets.ModelViewSet):
                 task.due_date, task.created_at,
             ])
         return response
+
+    @action(detail=False, methods=['post'], url_path='ai-generate-description')
+    def ai_generate_description(self, request):
+        title = request.data.get('title')
+        project_id = request.data.get('project')
+        if not title or not project_id:
+            return Response({'detail': 'title and project are required.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        project = Task.objects.filter(project_id=project_id).first()
+        project_name = project.project.name if project else "this project"
+
+        try:
+            description = generate_task_description(title, project_name)
+        except Exception as e:
+            return Response({'detail': f'AI service error: {str(e)}'}, status=status.HTTP_502_BAD_GATEWAY)
+
+        return Response({'description': description})
+
+    @action(detail=False, methods=['post'], url_path='ai-suggest-priority')
+    def ai_suggest_priority(self, request):
+        title = request.data.get('title')
+        description = request.data.get('description', '')
+        if not title:
+            return Response({'detail': 'title is required.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            priority, reason = suggest_priority(title, description)
+        except Exception as e:
+            return Response({'detail': f'AI service error: {str(e)}'}, status=status.HTTP_502_BAD_GATEWAY)
+
+        return Response({'priority': priority, 'reason': reason})

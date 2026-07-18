@@ -7,6 +7,7 @@ from django.core.cache import cache
 from .models import Project, ProjectMembership
 from .serializers import ProjectSerializer, ProjectMembershipSerializer, AddMemberSerializer
 from .permissions import IsProjectAdminOrOwner
+from tasks.ai_service import summarize_project
 
 User = get_user_model()
 
@@ -78,3 +79,23 @@ class ProjectViewSet(viewsets.ModelViewSet):
         }
         cache.set(cache_key, data, timeout=60)
         return Response(data)
+    
+    @action(detail=True, methods=['get'], url_path='ai-summary')
+    def ai_summary(self, request, pk=None):
+        project = self.get_object()
+        cache_key = f'project_ai_summary:{project.id}'
+        cached = cache.get(cache_key)
+        if cached is not None:
+            return Response({'summary': cached, 'cached': True})
+
+        tasks_data = list(project.tasks.values('title', 'status', 'priority'))
+        if not tasks_data:
+            return Response({'summary': 'No tasks yet in this project.', 'cached': False})
+
+        try:
+            summary = summarize_project(project.name, tasks_data)
+        except Exception as e:
+            return Response({'detail': f'AI service error: {str(e)}'}, status=status.HTTP_502_BAD_GATEWAY)
+
+        cache.set(cache_key, summary, timeout=300)
+        return Response({'summary': summary, 'cached': False})
