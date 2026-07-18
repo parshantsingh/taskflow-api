@@ -8,6 +8,9 @@ from .models import Project, ProjectMembership
 from .serializers import ProjectSerializer, ProjectMembershipSerializer, AddMemberSerializer
 from .permissions import IsProjectAdminOrOwner
 from tasks.ai_service import summarize_project
+from django.utils import timezone
+from datetime import timedelta
+from tasks.models import Task
 
 User = get_user_model()
 
@@ -99,3 +102,30 @@ class ProjectViewSet(viewsets.ModelViewSet):
 
         cache.set(cache_key, summary, timeout=300)
         return Response({'summary': summary, 'cached': False})
+    
+
+    @action(detail=False, methods=['get'], url_path='analytics/overview')
+    def analytics_overview(self, request):
+        cache_key = f'analytics_overview:{request.user.id}'
+        cached = cache.get(cache_key)
+        if cached is not None:
+            return Response(cached)
+
+        projects = Project.objects.filter(memberships__user=request.user).distinct()
+        seven_days_ago = timezone.now() - timedelta(days=7)
+
+        data = {
+            'total_projects': projects.count(),
+            'total_tasks': Task.objects.filter(project__in=projects).count(),
+            'tasks_by_status': dict(
+                Task.objects.filter(project__in=projects).values('status').annotate(count=Count('id')).values_list('status', 'count')
+            ),
+            'tasks_completed_last_7_days': Task.objects.filter(
+                project__in=projects, status='done', updated_at__gte=seven_days_ago
+            ).count(),
+            'overdue_tasks': Task.objects.filter(
+                project__in=projects, due_date__lt=timezone.now(), status__in=['todo', 'in_progress']
+            ).count(),
+        }
+        cache.set(cache_key, data, timeout=120)
+        return Response(data)

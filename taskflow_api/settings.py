@@ -37,6 +37,7 @@ INSTALLED_APPS = [
     'rest_framework_simplejwt',
     'django_filters',
     'drf_yasg',
+    'django_celery_beat',
 
     'accounts',
     'projects',
@@ -158,6 +159,7 @@ CELERY_BROKER_URL = env('REDIS_URL', default='redis://localhost:6379/0')
 CELERY_RESULT_BACKEND = env('REDIS_URL', default='redis://localhost:6379/0')
 CELERY_ACCEPT_CONTENT = ['json']
 CELERY_TASK_SERIALIZER = 'json'
+CELERY_BEAT_SCHEDULER = 'django_celery_beat.schedulers:DatabaseScheduler'
 
 EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
 

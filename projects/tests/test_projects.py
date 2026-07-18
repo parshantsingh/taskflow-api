@@ -109,3 +109,19 @@ def test_ai_project_summary(mock_summarize, auth_client):
     response = client.get(f'/api/projects/{project_id}/ai-summary/')
     assert response.status_code == 200
     assert 'summary' in response.data
+    
+    
+@pytest.mark.django_db
+def test_analytics_overview(auth_client):
+    client, user = auth_client
+    project_resp = client.post('/api/projects/', {'name': 'Project A'})
+    project_id = project_resp.data['id']
+    client.post('/api/tasks/', {'project': project_id, 'title': 'Task 1', 'status': 'done'})
+    client.post('/api/tasks/', {'project': project_id, 'title': 'Task 2', 'status': 'todo'})
+
+    response = client.get('/api/projects/analytics/overview/')
+    assert response.status_code == 200
+    assert response.data['total_projects'] == 1
+    assert response.data['total_tasks'] == 2
+    assert response.data['tasks_by_status']['done'] == 1
+    assert response.data['tasks_by_status']['todo'] == 1
