@@ -136,3 +136,60 @@ def test_ai_suggest_priority(mock_suggest, auth_client):
     })
     assert response.status_code == 200
     assert response.data['priority'] == 'high'
+    
+
+@pytest.mark.django_db
+def test_create_subtask(auth_client):
+    client, user = auth_client
+    project_resp = client.post('/api/projects/', {'name': 'Project A'})
+    project_id = project_resp.data['id']
+    parent_resp = client.post('/api/tasks/', {'project': project_id, 'title': 'Parent task'})
+    parent_id = parent_resp.data['id']
+
+    response = client.post(f'/api/tasks/{parent_id}/subtasks/', {'title': 'Subtask 1'})
+    assert response.status_code == 201
+    assert response.data['parent_task'] == parent_id
+
+
+@pytest.mark.django_db
+def test_subtask_completion_percentage(auth_client):
+    client, user = auth_client
+    project_resp = client.post('/api/projects/', {'name': 'Project A'})
+    project_id = project_resp.data['id']
+    parent_resp = client.post('/api/tasks/', {'project': project_id, 'title': 'Parent task'})
+    parent_id = parent_resp.data['id']
+
+    client.post(f'/api/tasks/{parent_id}/subtasks/', {'title': 'Sub 1', 'status': 'done'})
+    client.post(f'/api/tasks/{parent_id}/subtasks/', {'title': 'Sub 2', 'status': 'todo'})
+
+    response = client.get(f'/api/tasks/{parent_id}/')
+    assert response.data['subtask_completion']['total'] == 2
+    assert response.data['subtask_completion']['done'] == 1
+    assert response.data['subtask_completion']['percentage'] == 50
+
+
+@pytest.mark.django_db
+def test_task_dependency_blocks(auth_client):
+    client, user = auth_client
+    project_resp = client.post('/api/projects/', {'name': 'Project A'})
+    project_id = project_resp.data['id']
+    task_a = client.post('/api/tasks/', {'project': project_id, 'title': 'Task A'}).data
+    task_b = client.post('/api/tasks/', {'project': project_id, 'title': 'Task B'}).data
+
+    response = client.post(f'/api/tasks/{task_b["id"]}/block-by/{task_a["id"]}/')
+    assert response.status_code == 200
+    assert response.data['is_blocked'] is True
+
+
+@pytest.mark.django_db
+def test_task_dependency_prevents_circular(auth_client):
+    client, user = auth_client
+    project_resp = client.post('/api/projects/', {'name': 'Project A'})
+    project_id = project_resp.data['id']
+    task_a = client.post('/api/tasks/', {'project': project_id, 'title': 'Task A'}).data
+    task_b = client.post('/api/tasks/', {'project': project_id, 'title': 'Task B'}).data
+
+    client.post(f'/api/tasks/{task_b["id"]}/block-by/{task_a["id"]}/')
+    response = client.post(f'/api/tasks/{task_a["id"]}/block-by/{task_b["id"]}/')
+    assert response.status_code == 400
+    assert 'circular' in response.data['detail'].lower()

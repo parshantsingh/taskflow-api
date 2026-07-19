@@ -7,6 +7,9 @@ from asgiref.sync import async_to_sync
 from channels.layers import get_channel_layer
 from notifications.services import notify
 from notifications.models import Notification
+import logging
+
+logger = logging.getLogger('taskflow_api')
 
 _thread_locals = threading.local()
 
@@ -29,20 +32,22 @@ def broadcast_activity(activity_log):
     channel_layer = get_channel_layer()
     if channel_layer is None:
         return
-    async_to_sync(channel_layer.group_send)(
-        f'project_{activity_log.task.project_id}',
-        {
-            'type': 'activity_message',
-            'data': {
-                'action': activity_log.action,
-                'detail': activity_log.detail,
-                'actor': activity_log.actor.username if activity_log.actor else None,
-                'task_title': activity_log.task.title,
-                'created_at': activity_log.created_at.isoformat(),
+    try:
+        async_to_sync(channel_layer.group_send)(
+            f'project_{activity_log.task.project_id}',
+            {
+                'type': 'activity_message',
+                'data': {
+                    'action': activity_log.action,
+                    'detail': activity_log.detail,
+                    'actor': activity_log.actor.username if activity_log.actor else None,
+                    'task_title': activity_log.task.title,
+                    'created_at': activity_log.created_at.isoformat(),
+                }
             }
-        }
-    )
-
+        )
+    except Exception:
+        logger.warning(f"Failed to broadcast activity for task {activity_log.task_id} — continuing anyway.", exc_info=True)
 
 @receiver(pre_save, sender=Task)
 def capture_old_status(sender, instance, **kwargs):

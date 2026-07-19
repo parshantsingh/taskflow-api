@@ -108,6 +108,52 @@ class TaskViewSet(viewsets.ModelViewSet):
                 task.due_date, task.created_at,
             ])
         return response
+    
+    @action(detail=True, methods=['post'], url_path='block-by/(?P<blocker_id>[^/.]+)')
+    def add_blocker(self, request, pk=None, blocker_id=None):
+        task = self.get_object()
+        blocker = self.get_queryset().filter(id=blocker_id).first()
+        if not blocker:
+            return Response({'detail': 'Blocking task not found or not accessible.'}, status=status.HTTP_404_NOT_FOUND)
+        if blocker.id == task.id:
+            return Response({'detail': 'A task cannot block itself.'}, status=status.HTTP_400_BAD_REQUEST)
+        if self._creates_cycle(task, blocker):
+            return Response({'detail': 'This would create a circular dependency.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        task.blocked_by.add(blocker)
+        return Response(TaskSerializer(task, context={'request': request}).data)
+
+    @action(detail=True, methods=['delete'], url_path='block-by/(?P<blocker_id>[^/.]+)')
+    def remove_blocker(self, request, pk=None, blocker_id=None):
+        task = self.get_object()
+        task.blocked_by.remove(blocker_id)
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+    def _creates_cycle(self, task, new_blocker):
+        # Would adding new_blocker as a blocker of `task` create a cycle?
+        # Walk new_blocker's own blockers — if we ever reach `task`, it's a cycle.
+        visited = set()
+        to_check = [new_blocker]
+        while to_check:
+            current = to_check.pop()
+            if current.id == task.id:
+                return True
+            if current.id in visited:
+                continue
+            visited.add(current.id)
+            to_check.extend(current.blocked_by.all())
+        return False
+    
+    @action(detail=True, methods=['post'], url_path='subtasks')
+    def create_subtask(self, request, pk=None):
+        parent = self.get_object()
+        data = request.data.copy()
+        data['project'] = parent.project_id
+        data['parent_task'] = parent.id
+        serializer = TaskSerializer(data=data, context={'request': request})
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+        return Response(serializer.data, status=status.HTTP_201_CREATED)
 
     @action(detail=False, methods=['post'], url_path='ai-generate-description')
     def ai_generate_description(self, request):
