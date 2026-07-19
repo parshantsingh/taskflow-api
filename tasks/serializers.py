@@ -1,17 +1,18 @@
 from rest_framework import serializers
-from .models import Task, Comment, ActivityLog, Attachment
+from .models import Task, Comment, ActivityLog, Attachment, TimeEntry
 from projects.models import ProjectMembership
 
 
 class TaskSerializer(serializers.ModelSerializer):
     subtask_completion = serializers.ReadOnlyField()
     is_blocked = serializers.SerializerMethodField()
+    total_time_logged_minutes = serializers.ReadOnlyField()
 
     class Meta:
         model = Task
-        fields = ['id', 'project', 'title', 'description', 'status', 'priority',
+        fields = ['id', 'project', 'title', 'description', 'status', 'priority', 'estimated_hours',
                   'assigned_to', 'due_date', 'parent_task', 'blocked_by',
-                  'subtask_completion', 'is_blocked', 'created_at', 'updated_at']
+                  'subtask_completion', 'is_blocked', 'total_time_logged_minutes', 'created_at', 'updated_at']
 
     def get_is_blocked(self, obj):
         return obj.is_blocked()
@@ -67,3 +68,13 @@ class AttachmentSerializer(serializers.ModelSerializer):
         model = Attachment
         fields = ['id', 'task', 'file', 'uploaded_by', 'original_filename', 'file_size', 'uploaded_at']
         read_only_fields = ['task', 'original_filename', 'file_size']
+        
+
+class TimeEntrySerializer(serializers.ModelSerializer):
+    username = serializers.ReadOnlyField(source='user.username')
+    duration_minutes = serializers.ReadOnlyField()
+
+    class Meta:
+        model = TimeEntry
+        fields = ['id', 'task', 'username', 'started_at', 'ended_at', 'duration_minutes', 'note']
+        read_only_fields = ['task', 'started_at']

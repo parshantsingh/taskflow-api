@@ -19,6 +19,7 @@ class Task(models.Model):
     description = models.TextField(blank=True)
     status = models.CharField(max_length=20, choices=Status.choices, default=Status.TODO)
     priority = models.CharField(max_length=10, choices=Priority.choices, default=Priority.MEDIUM)
+    estimated_hours = models.DecimalField(max_digits=6, decimal_places=2, null=True, blank=True)
     assigned_to = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name='tasks')
     parent_task = models.ForeignKey('self', on_delete=models.CASCADE, null=True, blank=True, related_name='subtasks')
     blocked_by = models.ManyToManyField('self', symmetrical=False, blank=True, related_name='blocks')
@@ -43,6 +44,13 @@ class Task(models.Model):
 
     def is_blocked(self):
         return self.blocked_by.exclude(status='done').exists()
+
+    @property
+    def total_time_logged_minutes(self):
+        completed_entries = self.time_entries.filter(ended_at__isnull=False)
+        total = sum((e.duration_minutes for e in completed_entries), 0)
+        return total
+    
 
 class Comment(models.Model):
     task = models.ForeignKey(Task, on_delete=models.CASCADE, related_name='comments')
@@ -96,3 +104,24 @@ class Attachment(models.Model):
 
     def __str__(self):
         return self.original_filename
+    
+
+class TimeEntry(models.Model):
+    task = models.ForeignKey(Task, on_delete=models.CASCADE, related_name='time_entries')
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='time_entries')
+    started_at = models.DateTimeField()
+    ended_at = models.DateTimeField(null=True, blank=True)
+    note = models.CharField(max_length=255, blank=True)
+
+    class Meta:
+        ordering = ['-started_at']
+
+    @property
+    def duration_minutes(self):
+        if not self.ended_at:
+            return None
+        delta = self.ended_at - self.started_at
+        return round(delta.total_seconds() / 60)
+
+    def __str__(self):
+        return f"{self.user.username} on {self.task.title}"

@@ -6,8 +6,9 @@ from rest_framework.response import Response
 from rest_framework.filters import OrderingFilter
 from rest_framework.parsers import MultiPartParser, FormParser
 from django_filters.rest_framework import DjangoFilterBackend
-from .models import Task, Attachment
-from .serializers import TaskSerializer, CommentSerializer, ActivityLogSerializer, AttachmentSerializer
+from django.utils import timezone
+from .models import Task, Attachment, TimeEntry
+from .serializers import TaskSerializer, CommentSerializer, ActivityLogSerializer, AttachmentSerializer, TimeEntrySerializer
 from .filters import TaskFilter
 from .tasks import send_due_date_reminder
 from .ai_service import generate_task_description, suggest_priority
@@ -143,7 +144,7 @@ class TaskViewSet(viewsets.ModelViewSet):
             visited.add(current.id)
             to_check.extend(current.blocked_by.all())
         return False
-    
+
     @action(detail=True, methods=['post'], url_path='subtasks')
     def create_subtask(self, request, pk=None):
         parent = self.get_object()
@@ -154,6 +155,33 @@ class TaskViewSet(viewsets.ModelViewSet):
         serializer.is_valid(raise_exception=True)
         serializer.save()
         return Response(serializer.data, status=status.HTTP_201_CREATED)
+    
+    @action(detail=True, methods=['post'], url_path='time/start')
+    def start_timer(self, request, pk=None):
+        task = self.get_object()
+        if TimeEntry.objects.filter(task=task, user=request.user, ended_at__isnull=True).exists():
+            return Response({'detail': 'A timer is already running for this task.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        entry = TimeEntry.objects.create(task=task, user=request.user, started_at=timezone.now())
+        return Response(TimeEntrySerializer(entry).data, status=status.HTTP_201_CREATED)
+
+    @action(detail=True, methods=['post'], url_path='time/stop')
+    def stop_timer(self, request, pk=None):
+        task = self.get_object()
+        entry = TimeEntry.objects.filter(task=task, user=request.user, ended_at__isnull=True).first()
+        if not entry:
+            return Response({'detail': 'No running timer found for this task.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        entry.ended_at = timezone.now()
+        entry.note = request.data.get('note', '')
+        entry.save(update_fields=['ended_at', 'note'])
+        return Response(TimeEntrySerializer(entry).data)
+
+    @action(detail=True, methods=['get'], url_path='time')
+    def time_entries(self, request, pk=None):
+        task = self.get_object()
+        entries = task.time_entries.select_related('user').all()
+        return Response(TimeEntrySerializer(entries, many=True).data)
 
     @action(detail=False, methods=['post'], url_path='ai-generate-description')
     def ai_generate_description(self, request):

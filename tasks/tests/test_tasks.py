@@ -193,3 +193,49 @@ def test_task_dependency_prevents_circular(auth_client):
     response = client.post(f'/api/tasks/{task_a["id"]}/block-by/{task_b["id"]}/')
     assert response.status_code == 400
     assert 'circular' in response.data['detail'].lower()
+    
+
+@pytest.mark.django_db
+def test_start_and_stop_timer(auth_client):
+    client, user = auth_client
+    project_resp = client.post('/api/projects/', {'name': 'Project A'})
+    project_id = project_resp.data['id']
+    task_resp = client.post('/api/tasks/', {'project': project_id, 'title': 'Task 1'})
+    task_id = task_resp.data['id']
+
+    start_resp = client.post(f'/api/tasks/{task_id}/time/start/')
+    assert start_resp.status_code == 201
+    assert start_resp.data['ended_at'] is None
+
+    stop_resp = client.post(f'/api/tasks/{task_id}/time/stop/', {'note': 'Finished the setup'})
+    assert stop_resp.status_code == 200
+    assert stop_resp.data['ended_at'] is not None
+    assert stop_resp.data['note'] == 'Finished the setup'
+
+
+@pytest.mark.django_db
+def test_cannot_start_second_timer_while_one_running(auth_client):
+    client, user = auth_client
+    project_resp = client.post('/api/projects/', {'name': 'Project A'})
+    project_id = project_resp.data['id']
+    task_resp = client.post('/api/tasks/', {'project': project_id, 'title': 'Task 1'})
+    task_id = task_resp.data['id']
+
+    client.post(f'/api/tasks/{task_id}/time/start/')
+    response = client.post(f'/api/tasks/{task_id}/time/start/')
+    assert response.status_code == 400
+
+
+@pytest.mark.django_db
+def test_total_time_logged(auth_client):
+    client, user = auth_client
+    project_resp = client.post('/api/projects/', {'name': 'Project A'})
+    project_id = project_resp.data['id']
+    task_resp = client.post('/api/tasks/', {'project': project_id, 'title': 'Task 1'})
+    task_id = task_resp.data['id']
+
+    client.post(f'/api/tasks/{task_id}/time/start/')
+    client.post(f'/api/tasks/{task_id}/time/stop/')
+
+    response = client.get(f'/api/tasks/{task_id}/')
+    assert response.data['total_time_logged_minutes'] is not None
