@@ -9,6 +9,7 @@ environ.Env.read_env(BASE_DIR / '.env')
 
 SECRET_KEY = env('SECRET_KEY')
 ANTHROPIC_API_KEY = env('ANTHROPIC_API_KEY', default='')
+VOYAGE_API_KEY = env('VOYAGE_API_KEY', default='')
 
 INSTALLED_APPS = [
     'channels',

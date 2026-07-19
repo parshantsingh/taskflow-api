@@ -125,3 +125,39 @@ def test_analytics_overview(auth_client):
     assert response.data['total_tasks'] == 2
     assert response.data['tasks_by_status']['done'] == 1
     assert response.data['tasks_by_status']['todo'] == 1
+    
+
+@pytest.mark.django_db
+@patch('projects.views.answer_project_question')
+@patch('projects.views.embed_query')
+def test_ask_project_question(mock_embed_query, mock_answer, auth_client):
+    mock_embed_query.return_value = [0.1, 0.2, 0.3]
+    mock_answer.return_value = "The login bug is currently blocking the release."
+
+    client, user = auth_client
+    project_resp = client.post('/api/projects/', {'name': 'Project A'})
+    project_id = project_resp.data['id']
+
+    from tasks.models import SearchDocument
+    SearchDocument.objects.create(
+        project_id=project_id, content_type='task', object_id=1,
+        text='Fix login bug blocking release', embedding=[0.1, 0.2, 0.31]
+    )
+
+    response = client.post(f'/api/projects/{project_id}/ask/', {'question': 'What is blocking the release?'})
+    assert response.status_code == 200
+    assert 'answer' in response.data
+    assert response.data['sources_used'] >= 1
+
+
+@pytest.mark.django_db
+@patch('projects.views.embed_query')
+def test_ask_returns_no_match_when_nothing_relevant(mock_embed_query, auth_client):
+    mock_embed_query.return_value = [0.9, 0.9, 0.9]
+    client, user = auth_client
+    project_resp = client.post('/api/projects/', {'name': 'Empty Project'})
+    project_id = project_resp.data['id']
+
+    response = client.post(f'/api/projects/{project_id}/ask/', {'question': 'Anything at all?'})
+    assert response.status_code == 200
+    assert response.data['sources_used'] == 0

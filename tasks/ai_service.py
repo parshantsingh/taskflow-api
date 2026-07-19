@@ -84,3 +84,25 @@ REASON: <one sentence reasoning>"""
             reason = line.replace("REASON:", "").strip()
 
     return priority, reason
+
+
+def answer_project_question(question, project_name, retrieved_chunks):
+    client = get_client()
+    context = "\n\n".join(f"- {chunk}" for chunk in retrieved_chunks)
+    prompt = f"""You are answering a question about the project "{project_name}" using only the
+context below, retrieved from the project's tasks and comments. If the context doesn't contain
+enough information to answer, say so honestly rather than guessing.
+
+Context:
+{context}
+
+Question: {question}
+
+Give a direct, concise answer grounded in the context above."""
+
+    message = client.messages.create(
+        model=MODEL,
+        max_tokens=400,
+        messages=[{"role": "user", "content": prompt}]
+    )
+    return message.content[0].text.strip()

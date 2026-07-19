@@ -239,3 +239,19 @@ def test_total_time_logged(auth_client):
 
     response = client.get(f'/api/tasks/{task_id}/')
     assert response.data['total_time_logged_minutes'] is not None
+    
+
+@pytest.mark.django_db
+@patch('tasks.signals.embed_text')
+def test_task_creation_indexes_search_document(mock_embed, auth_client):
+    mock_embed.return_value = [0.1, 0.2, 0.3]
+    client, user = auth_client
+    project_resp = client.post('/api/projects/', {'name': 'Project A'})
+    project_id = project_resp.data['id']
+    client.post('/api/tasks/', {'project': project_id, 'title': 'Fix the login bug', 'description': 'Users cannot log in'})
+
+    from tasks.models import SearchDocument
+    doc = SearchDocument.objects.filter(content_type='task').first()
+    assert doc is not None
+    assert 'login' in doc.text.lower()
+    assert doc.embedding == [0.1, 0.2, 0.3]

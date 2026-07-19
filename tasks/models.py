@@ -125,3 +125,23 @@ class TimeEntry(models.Model):
 
     def __str__(self):
         return f"{self.user.username} on {self.task.title}"
+    
+    
+class SearchDocument(models.Model):
+    """
+    A flattened, embeddable representation of a piece of project content
+    (a task or a comment). Kept separate from Task/Comment so we can index
+    other content types later without touching those models.
+    """
+    project = models.ForeignKey(Project, on_delete=models.CASCADE, related_name='search_documents')
+    content_type = models.CharField(max_length=20)  # 'task' or 'comment'
+    object_id = models.PositiveIntegerField()
+    text = models.TextField()
+    embedding = models.JSONField(null=True, blank=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        unique_together = ['content_type', 'object_id']
+
+    def __str__(self):
+        return f"{self.content_type}:{self.object_id}"

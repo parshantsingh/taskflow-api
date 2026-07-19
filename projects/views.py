@@ -13,6 +13,9 @@ from datetime import timedelta
 from tasks.models import Task
 from notifications.services import notify
 from notifications.models import Notification
+from tasks.embedding_service import embed_query, cosine_similarity
+from tasks.ai_service import answer_project_question
+from tasks.models import SearchDocument
 
 User = get_user_model()
 
@@ -138,3 +141,33 @@ class ProjectViewSet(viewsets.ModelViewSet):
         }
         cache.set(cache_key, data, timeout=120)
         return Response(data)
+    
+    @action(detail=True, methods=['post'], url_path='ask')
+    def ask(self, request, pk=None):
+        project = self.get_object()
+        question = request.data.get('question')
+        if not question:
+            return Response({'detail': 'question is required.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            query_embedding = embed_query(question)
+        except Exception as e:
+            return Response({'detail': f'Embedding service error: {str(e)}'}, status=status.HTTP_502_BAD_GATEWAY)
+
+        documents = SearchDocument.objects.filter(project=project, embedding__isnull=False)
+        scored = [
+            (cosine_similarity(query_embedding, doc.embedding), doc.text)
+            for doc in documents
+        ]
+        scored.sort(key=lambda pair: pair[0], reverse=True)
+        top_chunks = [text for score, text in scored[:5] if score > 0.3]
+
+        if not top_chunks:
+            return Response({'answer': "I couldn't find anything relevant in this project to answer that.", 'sources_used': 0})
+
+        try:
+            answer = answer_project_question(question, project.name, top_chunks)
+        except Exception as e:
+            return Response({'detail': f'AI service error: {str(e)}'}, status=status.HTTP_502_BAD_GATEWAY)
+
+        return Response({'answer': answer, 'sources_used': len(top_chunks)})
