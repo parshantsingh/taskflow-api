@@ -32,3 +32,13 @@ def clear_cache():
     cache.clear()
     yield
     cache.clear()
+    
+
+@pytest.fixture
+def celery_eager():
+    from taskflow_api.celery import app as celery_app
+    celery_app.conf.task_always_eager = True
+    celery_app.conf.task_eager_propagates = True
+    yield
+    celery_app.conf.task_always_eager = False
+    celery_app.conf.task_eager_propagates = False

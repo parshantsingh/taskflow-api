@@ -24,6 +24,7 @@ urlpatterns = [
     path('api/projects/', include('projects.urls')),
     path('api/tasks/', include('tasks.urls')),
     path('api/notifications/', include('notifications.urls')),
+    path('api/webhooks/', include('webhooks.urls')),
     path('swagger/', schema_view.with_ui('swagger', cache_timeout=0), name='schema-swagger-ui'),
     path('redoc/', schema_view.with_ui('redoc', cache_timeout=0), name='schema-redoc'),
 ]

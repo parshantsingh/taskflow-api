@@ -1,14 +1,15 @@
 import logging
 import threading
 from django.db.models.signals import pre_save, post_save, post_delete
-from django.core.cache import cache
 from django.dispatch import receiver
+from django.core.cache import cache
 from asgiref.sync import async_to_sync
 from channels.layers import get_channel_layer
 from .models import Task, Comment, ActivityLog, SearchDocument
 from .embedding_service import embed_text
 from notifications.services import notify
 from notifications.models import Notification
+from webhooks.services import trigger_webhook_event
 
 logger = logging.getLogger('taskflow_api')
 
@@ -88,6 +89,9 @@ def log_task_save(sender, instance, created, **kwargs):
                 message=f"You were assigned to '{instance.title}'",
                 task=instance, project=instance.project,
             )
+        trigger_webhook_event(instance.project, 'task.created', {
+            'id': instance.id, 'title': instance.title, 'status': instance.status,
+        })
     else:
         old_status = getattr(instance, '_old_status', None)
         if old_status and old_status != instance.status:
@@ -100,9 +104,16 @@ def log_task_save(sender, instance, created, **kwargs):
                     message=f"'{instance.title}' status changed to {instance.status}",
                     task=instance, project=instance.project,
                 )
+            trigger_webhook_event(instance.project, 'task.status_changed', {
+                'id': instance.id, 'title': instance.title,
+                'old_status': old_status, 'new_status': instance.status,
+            })
         else:
             log = ActivityLog.objects.create(task=instance, actor=actor, action=ActivityLog.ActionType.UPDATED,
                                               detail=f"Task '{instance.title}' updated")
+            trigger_webhook_event(instance.project, 'task.updated', {
+                'id': instance.id, 'title': instance.title,
+            })
     broadcast_activity(log)
     index_for_search('task', instance.id, instance.project_id, f"{instance.title}\n{instance.description}")
 
@@ -121,6 +132,9 @@ def log_comment(sender, instance, created, **kwargs):
                 message=f"{instance.author.username} commented on '{instance.task.title}'",
                 task=instance.task, project=instance.task.project,
             )
+        trigger_webhook_event(instance.task.project, 'comment.created', {
+            'id': instance.id, 'body': instance.body, 'task_id': instance.task_id,
+        })
         index_for_search('comment', instance.id, instance.task.project_id, instance.body)
 
 
