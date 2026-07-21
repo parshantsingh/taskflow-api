@@ -22,6 +22,11 @@ class TaskSerializer(serializers.ModelSerializer):
         if not ProjectMembership.objects.filter(project=project, user=request.user).exists():
             raise serializers.ValidationError("You are not a member of this project.")
         return project
+    
+    def validate_estimated_hours(self, value):
+        if value is not None and value <= 0:
+            raise serializers.ValidationError("Estimated hours must be greater than zero.")
+        return value
 
     def validate(self, data):
         parent_task = data.get('parent_task') or getattr(self.instance, 'parent_task', None)

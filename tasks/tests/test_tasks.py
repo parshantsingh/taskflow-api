@@ -255,3 +255,15 @@ def test_task_creation_indexes_search_document(mock_embed, auth_client):
     assert doc is not None
     assert 'login' in doc.text.lower()
     assert doc.embedding == [0.1, 0.2, 0.3]
+    
+
+@pytest.mark.django_db
+def test_task_rejects_negative_estimated_hours(auth_client):
+    client, user = auth_client
+    project_resp = client.post('/api/projects/', {'name': 'Project A'})
+    project_id = project_resp.data['id']
+
+    response = client.post('/api/tasks/', {
+        'project': project_id, 'title': 'Task 1', 'estimated_hours': -5
+    })
+    assert response.status_code == 400

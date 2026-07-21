@@ -70,3 +70,27 @@ def test_webhook_not_triggered_for_unsubscribed_event(mock_post, auth_client, ce
     client.post('/api/tasks/', {'project': project_id, 'title': 'Task 1'})
 
     assert not mock_post.called
+
+
+@pytest.mark.django_db
+def test_webhook_rejects_non_http_url(auth_client):
+    client, user = auth_client
+    project_resp = client.post('/api/projects/', {'name': 'Project A'})
+    project_id = project_resp.data['id']
+
+    response = client.post('/api/webhooks/', {
+        'project': project_id, 'url': 'ftp://example.com/hook', 'event_types': ['task.created']
+    }, format='json')
+    assert response.status_code == 400
+
+
+@pytest.mark.django_db
+def test_webhook_rejects_localhost_url(auth_client):
+    client, user = auth_client
+    project_resp = client.post('/api/projects/', {'name': 'Project A'})
+    project_id = project_resp.data['id']
+
+    response = client.post('/api/webhooks/', {
+        'project': project_id, 'url': 'http://localhost:8000/hook', 'event_types': ['task.created']
+    }, format='json')
+    assert response.status_code == 400

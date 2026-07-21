@@ -26,7 +26,14 @@ class WebhookSerializer(serializers.ModelSerializer):
         if membership.role not in ['owner', 'admin']:
             raise serializers.ValidationError("Only project owners/admins can manage webhooks.")
         return project
-
+    
+    def validate_url(self, value):
+        if not value.startswith(('http://', 'https://')):
+            raise serializers.ValidationError("Webhook URL must use http or https.")
+        blocked_hosts = ['localhost', '127.0.0.1', '0.0.0.0', '169.254.169.254']
+        if any(host in value for host in blocked_hosts):
+            raise serializers.ValidationError("Webhook URL cannot target internal/local addresses.")
+        return value
 
 class WebhookDeliverySerializer(serializers.ModelSerializer):
     class Meta:
