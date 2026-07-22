@@ -161,3 +161,27 @@ def test_ask_returns_no_match_when_nothing_relevant(mock_embed_query, auth_clien
     response = client.post(f'/api/projects/{project_id}/ask/', {'question': 'Anything at all?'})
     assert response.status_code == 200
     assert response.data['sources_used'] == 0
+    
+    
+@pytest.mark.django_db
+def test_non_member_cannot_view_project(auth_client, create_user):
+    client, user = auth_client
+    project_resp = client.post('/api/projects/', {'name': 'Private Project'})
+    project_id = project_resp.data['id']
+
+    outsider = create_user(username='outsider', password='testpass123')
+    from rest_framework.test import APIClient
+    outsider_client = APIClient()
+    login = outsider_client.post('/api/auth/login/', {'username': 'outsider', 'password': 'testpass123'})
+    outsider_client.credentials(HTTP_AUTHORIZATION=f'Bearer {login.data["access"]}')
+
+    response = outsider_client.get(f'/api/projects/{project_id}/')
+    assert response.status_code == 404
+
+
+@pytest.mark.django_db
+def test_unauthenticated_request_returns_401():
+    from rest_framework.test import APIClient
+    client = APIClient()
+    response = client.get('/api/projects/')
+    assert response.status_code == 401

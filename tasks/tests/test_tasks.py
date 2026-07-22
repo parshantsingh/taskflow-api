@@ -267,3 +267,21 @@ def test_task_rejects_negative_estimated_hours(auth_client):
         'project': project_id, 'title': 'Task 1', 'estimated_hours': -5
     })
     assert response.status_code == 400
+    
+    
+@pytest.mark.django_db
+def test_non_member_cannot_view_task(auth_client, create_user):
+    client, user = auth_client
+    project_resp = client.post('/api/projects/', {'name': 'Private Project'})
+    project_id = project_resp.data['id']
+    task_resp = client.post('/api/tasks/', {'project': project_id, 'title': 'Secret task'})
+    task_id = task_resp.data['id']
+
+    outsider = create_user(username='outsider2', password='testpass123')
+    from rest_framework.test import APIClient
+    outsider_client = APIClient()
+    login = outsider_client.post('/api/auth/login/', {'username': 'outsider2', 'password': 'testpass123'})
+    outsider_client.credentials(HTTP_AUTHORIZATION=f'Bearer {login.data["access"]}')
+
+    response = outsider_client.get(f'/api/tasks/{task_id}/')
+    assert response.status_code == 404
