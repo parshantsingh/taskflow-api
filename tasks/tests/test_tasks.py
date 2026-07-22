@@ -285,3 +285,20 @@ def test_non_member_cannot_view_task(auth_client, create_user):
 
     response = outsider_client.get(f'/api/tasks/{task_id}/')
     assert response.status_code == 404
+    
+
+@pytest.mark.django_db
+def test_duplicate_task(auth_client):
+    client, user = auth_client
+    project_resp = client.post('/api/projects/', {'name': 'Project A'})
+    project_id = project_resp.data['id']
+    task_resp = client.post('/api/tasks/', {
+        'project': project_id, 'title': 'Original task', 'priority': 'high', 'status': 'in_progress'
+    })
+    task_id = task_resp.data['id']
+
+    response = client.post(f'/api/tasks/{task_id}/duplicate/')
+    assert response.status_code == 201
+    assert response.data['title'] == 'Original task (copy)'
+    assert response.data['status'] == 'todo'
+    assert response.data['priority'] == 'high'

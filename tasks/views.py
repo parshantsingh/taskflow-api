@@ -156,6 +156,20 @@ class TaskViewSet(viewsets.ModelViewSet):
         serializer.save()
         return Response(serializer.data, status=status.HTTP_201_CREATED)
     
+    @action(detail=True, methods=['post'], url_path='duplicate')
+    def duplicate(self, request, pk=None):
+        original = self.get_object()
+        copy = Task.objects.create(
+            project=original.project,
+            title=f"{original.title} (copy)",
+            description=original.description,
+            status=Task.Status.TODO,
+            priority=original.priority,
+            assigned_to=original.assigned_to,
+            estimated_hours=original.estimated_hours,
+        )
+        return Response(TaskSerializer(copy, context={'request': request}).data, status=status.HTTP_201_CREATED)
+    
     @action(detail=True, methods=['post'], url_path='time/start')
     def start_timer(self, request, pk=None):
         task = self.get_object()
