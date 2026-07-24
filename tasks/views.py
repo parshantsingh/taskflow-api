@@ -170,6 +170,13 @@ class TaskViewSet(viewsets.ModelViewSet):
         )
         return Response(TaskSerializer(copy, context={'request': request}).data, status=status.HTTP_201_CREATED)
     
+    @action(detail=False, methods=['get'], url_path='my-tasks')
+    def my_tasks(self, request):
+        tasks = self.get_queryset().filter(assigned_to=request.user).order_by('due_date')
+        page = self.paginate_queryset(tasks)
+        serializer = self.get_serializer(page, many=True)
+        return self.get_paginated_response(serializer.data)
+    
     @action(detail=True, methods=['post'], url_path='time/start')
     def start_timer(self, request, pk=None):
         task = self.get_object()

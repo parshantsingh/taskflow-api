@@ -302,3 +302,20 @@ def test_duplicate_task(auth_client):
     assert response.data['title'] == 'Original task (copy)'
     assert response.data['status'] == 'todo'
     assert response.data['priority'] == 'high'
+    
+
+@pytest.mark.django_db
+def test_my_tasks_only_shows_assigned_to_current_user(auth_client, create_user):
+    client, user = auth_client
+    teammate = create_user(username='teammate3')
+    project_resp = client.post('/api/projects/', {'name': 'Project A'})
+    project_id = project_resp.data['id']
+    client.post(f'/api/projects/{project_id}/members/', {'username': 'teammate3'})
+
+    client.post('/api/tasks/', {'project': project_id, 'title': 'Mine', 'assigned_to': user.id})
+    client.post('/api/tasks/', {'project': project_id, 'title': 'Theirs', 'assigned_to': teammate.id})
+
+    response = client.get('/api/tasks/my-tasks/')
+    assert response.status_code == 200
+    assert response.data['count'] == 1
+    assert response.data['results'][0]['title'] == 'Mine'
