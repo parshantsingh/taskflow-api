@@ -234,3 +234,10 @@ class TaskViewSet(viewsets.ModelViewSet):
             return Response({'detail': f'AI service error: {str(e)}'}, status=status.HTTP_502_BAD_GATEWAY)
 
         return Response({'priority': priority, 'reason': reason})
+    
+    @action(detail=False, methods=['get'], url_path='metadata')
+    def metadata_choices(self, request):
+        return Response({
+            'status_choices': dict(Task.Status.choices),
+            'priority_choices': dict(Task.Priority.choices),
+        })

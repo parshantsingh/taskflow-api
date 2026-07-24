@@ -319,3 +319,12 @@ def test_my_tasks_only_shows_assigned_to_current_user(auth_client, create_user):
     assert response.status_code == 200
     assert response.data['count'] == 1
     assert response.data['results'][0]['title'] == 'Mine'
+    
+    
+@pytest.mark.django_db
+def test_task_metadata_endpoint(auth_client):
+    client, user = auth_client
+    response = client.get('/api/tasks/metadata/')
+    assert response.status_code == 200
+    assert 'todo' in response.data['status_choices']
+    assert 'high' in response.data['priority_choices']
