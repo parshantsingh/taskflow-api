@@ -64,3 +64,19 @@ def test_error_response_has_consistent_shape(api_client):
     assert response.data['error'] is True
     assert 'detail' in response.data
     assert response.data['status_code'] == 401
+    
+    
+@pytest.mark.django_db
+def test_get_own_profile(auth_client):
+    client, user = auth_client
+    response = client.get('/api/auth/me/')
+    assert response.status_code == 200
+    assert response.data['username'] == user.username
+
+
+@pytest.mark.django_db
+def test_update_own_profile(auth_client):
+    client, user = auth_client
+    response = client.patch('/api/auth/me/', {'bio': 'Backend engineer'}, format='json')
+    assert response.status_code == 200
+    assert response.data['bio'] == 'Backend engineer'
