@@ -25,12 +25,15 @@ class ProjectViewSet(viewsets.ModelViewSet):
     permission_classes = [permissions.IsAuthenticated, IsProjectAdminOrOwner]
 
     def get_queryset(self):
-            if getattr(self, 'swagger_fake_view', False):
-                return Project.objects.none()
-            member_subquery = ProjectMembership.objects.filter(project=OuterRef('pk'), user=self.request.user)
-            return Project.objects.filter(Exists(member_subquery)).select_related('owner').annotate(
-                annotated_member_count=Count('memberships', distinct=True)
-            )
+        if getattr(self, 'swagger_fake_view', False):
+            return Project.objects.none()
+        member_subquery = ProjectMembership.objects.filter(project=OuterRef('pk'), user=self.request.user)
+        queryset = Project.objects.filter(Exists(member_subquery)).select_related('owner').annotate(
+            annotated_member_count=Count('memberships', distinct=True)
+        )
+        if self.request.query_params.get('include_archived') != 'true':
+            queryset = queryset.filter(is_archived=False)
+        return queryset
 
     def perform_create(self, serializer):
         project = serializer.save(owner=self.request.user)
@@ -115,7 +118,6 @@ class ProjectViewSet(viewsets.ModelViewSet):
         cache.set(cache_key, summary, timeout=300)
         return Response({'summary': summary, 'cached': False})
     
-
     @action(detail=False, methods=['get'], url_path='analytics/overview')
     def analytics_overview(self, request):
         cache_key = f'analytics_overview:{request.user.id}'
@@ -141,6 +143,20 @@ class ProjectViewSet(viewsets.ModelViewSet):
         }
         cache.set(cache_key, data, timeout=120)
         return Response(data)
+    
+    @action(detail=True, methods=['post'], url_path='archive')
+    def archive(self, request, pk=None):
+        project = self.get_object()
+        project.is_archived = True
+        project.save(update_fields=['is_archived'])
+        return Response(ProjectSerializer(project).data)
+
+    @action(detail=True, methods=['post'], url_path='unarchive')
+    def unarchive(self, request, pk=None):
+        project = self.get_object()
+        project.is_archived = False
+        project.save(update_fields=['is_archived'])
+        return Response(ProjectSerializer(project).data)
     
     @action(detail=True, methods=['post'], url_path='ask')
     def ask(self, request, pk=None):

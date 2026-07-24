@@ -185,3 +185,20 @@ def test_unauthenticated_request_returns_401():
     client = APIClient()
     response = client.get('/api/projects/')
     assert response.status_code == 401
+    
+
+@pytest.mark.django_db
+def test_archive_project_hides_it_from_default_list(auth_client):
+    client, user = auth_client
+    project_resp = client.post('/api/projects/', {'name': 'Old Project'})
+    project_id = project_resp.data['id']
+
+    archive_resp = client.post(f'/api/projects/{project_id}/archive/')
+    assert archive_resp.status_code == 200
+    assert archive_resp.data['is_archived'] is True
+
+    list_resp = client.get('/api/projects/')
+    assert list_resp.data['count'] == 0
+
+    list_with_archived = client.get('/api/projects/?include_archived=true')
+    assert list_with_archived.data['count'] == 1
